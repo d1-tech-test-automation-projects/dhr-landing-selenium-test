@@ -38,39 +38,60 @@ public class BaseStep extends LogTest {
         /**
          * Chrome driver'ı başlatır ve konfigüre eder
          */
-        public static void openChromeDriver() {
-            try {
-                stepInfo("Initializing Chrome WebDriver");
 
-                // Chrome options
-                ChromeOptions options = new ChromeOptions();
-                options.addArguments("--disable-notifications");
-                options.addArguments("--disable-popup-blocking");
-                options.addArguments("--ignore-certificate-errors");
-                options.addArguments("--ignore-ssl-errors");
-                options.addArguments("--allow-running-insecure-content");
 
-                // Driver oluştur
-                driver = new ChromeDriver(options);
-                wait = new WebDriverWait(driver, Duration.ofSeconds(DEFAULT_TIMEOUT));
+    /* güncel openchromedriver method */
 
-                // Temel konfigürasyonlar
-                driver.manage().window().maximize();
-                driver.manage().deleteAllCookies();
-                driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(DEFAULT_TIMEOUT));
+     public static void openChromeDriver() {
+     try {
+     stepInfo("Initializing Chrome WebDriver");
 
-                browserAction("Chrome browser initialized", "Chrome");
+     // Chrome options
+     ChromeOptions options = new ChromeOptions();
 
-                // Default URL'e git
-                navigateToUrl(DEFAULT_URL);
+     // Jenkins / CI ortamı için headless ve viewport ayarları
+     String headlessMode = System.getProperty("headless", "false");
+     if ("true".equalsIgnoreCase(headlessMode)) {
+     options.addArguments("--headless=new");
+     options.addArguments("--disable-gpu");
+     options.addArguments("--no-sandbox");
+     options.addArguments("--disable-dev-shm-usage");
+     }
+     options.addArguments("--window-size=1920,1080");
 
-            } catch (Exception e) {
-                logException("Opening Chrome driver", e);
-                throw new RuntimeException("Failed to initialize Chrome driver", e);
-            }
-        }
+     // Mevcut argümanlar
+     options.addArguments("--disable-notifications");
+     options.addArguments("--disable-popup-blocking");
+     options.addArguments("--ignore-certificate-errors");
+     options.addArguments("--ignore-ssl-errors");
+     options.addArguments("--allow-running-insecure-content");
 
-        /**
+     // Driver oluştur
+     driver = new ChromeDriver(options);
+     wait = new WebDriverWait(driver, Duration.ofSeconds(DEFAULT_TIMEOUT));
+
+     // Temel konfigürasyonlar
+     // Headless modda maximize() çalışmaz; sadece GUI modda devreye alıyoruz
+     if (!"true".equalsIgnoreCase(headlessMode)) {
+     driver.manage().window().maximize();
+     }
+     driver.manage().deleteAllCookies();
+     driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(DEFAULT_TIMEOUT));
+
+     browserAction("Chrome browser initialized", "Chrome");
+
+     // Default URL'e git
+     navigateToUrl(DEFAULT_URL);
+
+     } catch (Exception e) {
+     logException("Opening Chrome driver", e);
+     throw new RuntimeException("Failed to initialize Chrome driver", e);
+     }
+     }
+
+
+
+    /**
          * Driver'ı kapatır
          */
         public static void driverQuit() {
@@ -165,11 +186,90 @@ public class BaseStep extends LogTest {
 
     public static void waitSeconds(int seconds) {
         try {
-            Thread.sleep(seconds * 1000L); // ✅ Mükemmel!
+            Thread.sleep(seconds * 1000L);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             System.err.println("Wait interrupted: " + e.getMessage());
         }
+    }
+
+    public static void scrollDown(int pixels) {
+        try {
+            stepInfo("Scrolling down by " + pixels + " pixels");
+            ((JavascriptExecutor) driver).executeScript("window.scrollBy(0, " + pixels + ");");
+            waitSeconds(1);
+        } catch (Exception e) {
+            logException("Scroll down", e);
+            throw new RuntimeException("Failed to scroll down", e);
+        }
+    }
+
+    /**
+     * Sayfayı yumuşakça (smooth behavior) belirli sayıda adımda aşağı scroll eder.
+     * Test akışında doğal görüntü için kullanılır.
+     */
+    public static void smoothScrollDown(int totalPixels, int steps) {
+        try {
+            if (steps <= 0) {
+                throw new IllegalArgumentException("Steps must be positive");
+            }
+            int pixelsPerStep = totalPixels / steps;
+            stepInfo("Smooth scrolling down: " + totalPixels + " px in " + steps + " steps");
+            for (int i = 0; i < steps; i++) {
+                ((JavascriptExecutor) driver).executeScript(
+                        "window.scrollBy({top: " + pixelsPerStep + ", behavior: 'smooth'});"
+                );
+                waitSeconds(1);
+            }
+        } catch (Exception e) {
+            logException("Smooth scroll down", e);
+            throw new RuntimeException("Failed to smooth scroll down", e);
+        }
+    }
+
+    /**
+     * Elementi viewport'un tam ortasına scroll eder.
+     * Sticky navbar / header'ın tıklamayı intercept etmesini önler.
+     */
+    public static void scrollIntoCenter(WebElement element) {
+        try {
+            ((JavascriptExecutor) driver).executeScript(
+                    "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});",
+                    element
+            );
+            waitSeconds(1);
+        } catch (Exception e) {
+            logException("Scroll into center", e);
+            throw new RuntimeException("Failed to scroll element into center", e);
+        }
+    }
+
+    /**
+     * JavaScript ile element click yapar.
+     * Standart click intercept ettiğinde veya stale element durumunda işe yarar.
+     */
+    public static void jsClick(WebElement element, String elementDescription) {
+        try {
+            actionInfo("JS Click", elementDescription);
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
+            waitSeconds(1);
+            stepInfo("Element clicked successfully via JS: " + elementDescription);
+        } catch (Exception e) {
+            logException("JS Click operation", e);
+            TakeScreenShot.takeFailureScreenshot("jsClick", driver, "Failed to JS click: " + elementDescription);
+            throw new RuntimeException("Failed to JS click element: " + elementDescription, e);
+        }
+    }
+
+    /**
+     * XPath ile bulduğu elementi viewport ortasına alıp JS click yapar.
+     * Accordion / FAQ butonları gibi sticky navbar tarafından intercept
+     * edilebilen elementler için pratik kullanım sunar.
+     */
+    public static void scrollAndJsClick(String xpath, String elementDescription, int timeoutSeconds) {
+        WebElement element = findElementXpathWithWait(xpath, timeoutSeconds);
+        scrollIntoCenter(element);
+        jsClick(element, elementDescription);
     }
 
 

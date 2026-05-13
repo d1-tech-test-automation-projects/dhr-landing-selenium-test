@@ -11,6 +11,9 @@ import org.junit.platform.suite.api.SuiteDisplayName;
  *
  * Yeni bir modül test sınıfı eklediğinizde:
  *   1. Yeni sınıfı yazın (örn: DhrLeaveModuleTest.java)
+ *
+ *
+ *
  *   2. Aşağıdaki @SelectClasses listesine ekleyin
  *   3. Suite'i çalıştırdığınızda otomatik olarak sıralı çalışır
  *
@@ -21,7 +24,11 @@ import org.junit.platform.suite.api.SuiteDisplayName;
 @Suite
 @SuiteDisplayName("DHR Landing All Pages Test Suite")
 @SelectClasses({
-        DhrLandingAllPageTest.class,
+        HomePageTest.class,
+        ResourcesPageTest.class,
+        ExplorePageTest.class,
+        ModulesPageTest.class,
+
 
 })
 @ConfigurationParameter(
